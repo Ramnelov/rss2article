@@ -14,9 +14,15 @@ async def run() -> None:
     SessionLocal = create_sessionmaker(engine)
 
     feed_urls = [
-        "https://techradar.com/rss",
-        "http://www.reddit.com/r/MachineLearning/.rss",
-        "http://neurosciencenews.com/feed/",
+        "https://www.butikstrender.se/feed/",
+        "https://www.dagligvarunytt.se/rss.xml",
+        "https://www.ehandel.se/feed",
+        "https://www.market.se/rss.xml",
+        "https://news.cision.com/ListItems?format=rss",
+        "https://www.handelstrender.se/feed/",
+        "https://www.retaildive.com/feeds/news/",
+        "https://www.retailgazette.co.uk/feed/",
+        "https://insideretail.asia/feed/",
     ]
 
     try:

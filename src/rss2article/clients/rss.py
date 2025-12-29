@@ -81,7 +81,7 @@ def fetch_feed_items(feed_url: list[str]) -> list[FeedItem]:
                 entry_id=entry_id,
                 title=entry.get("title"),
                 link=link,
-                author=entry.get("author"),
+                author=entry.get("author") or "Unknown Author",
                 published_at=published_at,
                 content_text=content_text,
             )
