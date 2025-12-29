@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,3 +32,18 @@ async def upsert_feed_item(session: AsyncSession, feed_id: int, item: FeedItem) 
         )
     )
     await session.execute(stmt)
+
+
+async def get_feed_items_by_entry_ids(
+    session: AsyncSession,
+    entry_ids: list[str],
+) -> list[FeedItemORM]:
+    if not entry_ids:
+        return []
+
+    stmt = (
+        select(FeedItemORM)
+        .where(FeedItemORM.entry_id.in_(entry_ids))
+        .order_by(FeedItemORM.published_at.asc())
+    )
+    return list((await session.scalars(stmt)).all())

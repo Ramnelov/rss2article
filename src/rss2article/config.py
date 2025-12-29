@@ -12,3 +12,4 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field(..., alias="DATABASE_URL")
+    openai_api_key: str = Field(..., alias="OPENAI_API_KEY")

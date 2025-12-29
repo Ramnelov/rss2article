@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -55,6 +56,12 @@ class FeedItemORM(Base):
 
     content_text: Mapped[str] = mapped_column(Text, nullable=False)
 
+    relevance: Mapped["RelevanceORM | None"] = relationship(
+        back_populates="feed_item",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -65,4 +72,28 @@ class FeedItemORM(Base):
         UniqueConstraint("feed_id", "entry_id", name="uq_feed_items_feed_id_entry_id"),
         UniqueConstraint("feed_id", "link", name="uq_feed_items_feed_id_link"),
         Index("ix_feed_items_feed_id_published_at", "feed_id", "published_at"),
+    )
+
+
+class RelevanceORM(Base):
+    __tablename__ = "relevance"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    feed_item_id: Mapped[int] = mapped_column(
+        ForeignKey("feed_items.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    feed_item: Mapped["FeedItemORM"] = relationship(back_populates="relevance")
+
+    relevant: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    why: Mapped[str] = mapped_column(String(2048), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
