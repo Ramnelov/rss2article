@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -7,10 +8,11 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from rss2article.clients.openai import client
-from rss2article.db.mappers import orm_to_feed_items
+from rss2article.db.mappers import orm_to_feed_item
 from rss2article.db.repositories.feed_items import get_feed_items_by_entry_ids
 from rss2article.db.repositories.relevance import (
     get_unclassified_feed_entry_ids_by_feed_url,
+    upsert_relevance,
 )
 from rss2article.domain.models import FeedItem
 
@@ -102,7 +104,7 @@ Artikeltext:
 """.strip()
 
     resp = await client.responses.create(
-        model="gpt-4.1",
+        model="gpt-4.1-mini",
         input=[
             {"role": "system", "content": RELEVANCE_SYSTEM},
             {"role": "user", "content": user_prompt},
@@ -118,13 +120,6 @@ Artikeltext:
     )
 
     data = json.loads(resp.output_text)
-    log.info(
-        "Relevance entry_id=%s relevant=%s conf=%.2f pest=%s",
-        feed_item.entry_id,
-        data["relevant"],
-        data["confidence"],
-        data["pest"],
-    )
 
     return bool(data["relevant"]), str(data["why"])
 
@@ -133,18 +128,30 @@ async def classify_relevance(
     feed_urls: list[str], SessionLocal: async_sessionmaker[AsyncSession]
 ) -> None:
 
-    missing_ids: list[int] = []
-
-    for feed_url in feed_urls:
-
-        async with SessionLocal() as session:
+    missing_ids: list[str] = []
+    async with SessionLocal() as session:
+        for feed_url in feed_urls:
             missing_ids.extend(
                 await get_unclassified_feed_entry_ids_by_feed_url(session, feed_url)
             )
+        feed_items_orm = await get_feed_items_by_entry_ids(session, missing_ids)
+    feed_items = [orm_to_feed_item(o) for o in feed_items_orm]
+
+    sem = asyncio.Semaphore(16)
+
+    async def classify_one(item: FeedItem):
+        async with sem:
+            return await classify_with_llm(item)
+
+    results = await asyncio.gather(*(classify_one(i) for i in feed_items))
 
     async with SessionLocal() as session:
-        feed_items_orm = await get_feed_items_by_entry_ids(session, missing_ids)
-        feed_items = orm_to_feed_items(feed_items_orm)
-
-        for item in feed_items:
-            relevant, why = await classify_with_llm(item)
+        async with session.begin():
+            for orm_item, (relevant, why) in zip(feed_items_orm, results, strict=True):
+                why = (why or "").strip()[:2048] or "—"
+                await upsert_relevance(
+                    session,
+                    feed_item_id=orm_item.id,
+                    relevant=relevant,
+                    why=why,
+                )
